@@ -1,76 +1,52 @@
-import { ThemedText } from "@/components/themed-text";
-import { ThemedView } from "@/components/themed-view";
+import AppHeader from "@/components/common/app-header";
+import CustomAlert from "@/components/common/custom-alert";
+import Loader from "@/components/common/loader";
+import { ThemedText } from "@/components/common/themed-text";
+import { ThemedView } from "@/components/common/themed-view";
+import { useMap } from "@/hooks/use-map";
 import { Ionicons } from "@expo/vector-icons";
-import { LinearGradient } from "expo-linear-gradient";
-import * as Location from "expo-location";
-import React, { useEffect, useState } from "react";
+import React from "react";
 import { StyleSheet, TouchableOpacity } from "react-native";
-import MapView, { PROVIDER_DEFAULT, PROVIDER_GOOGLE } from "react-native-maps";
-
-interface Region {
-  latitude: number;
-  longitude: number;
-  latitudeDelta: number;
-  longitudeDelta: number;
-}
-
-async function requestPermissions() {
-  const { status } = await Location.requestForegroundPermissionsAsync();
-  if (status !== "granted") {
-    throw new Error("Permiso de ubicación denegado");
-  }
-}
+import MapView, {
+  PROVIDER_DEFAULT,
+  PROVIDER_GOOGLE,
+  Polyline,
+} from "react-native-maps";
 
 export default function MapScreen() {
-  const [region, setRegion] = useState<Region>({
-    latitude: 4.711,
-    longitude: -74.0721,
-    latitudeDelta: 0.0922,
-    longitudeDelta: 0.0421,
-  });
+  const {
+    region,
+    isTracking,
+    routePoints,
+    startTrip,
+    stopTrip,
+    isLoadingLocation,
+    alert,
+  } = useMap();
 
-  useEffect(() => {
-    (async () => {
-      try {
-        await requestPermissions();
-        const location = await Location.getCurrentPositionAsync({
-          accuracy: Location.Accuracy.Balanced,
-        });
-        setRegion({
-          latitude: location.coords.latitude,
-          longitude: location.coords.longitude,
-          latitudeDelta: 0.0922,
-          longitudeDelta: 0.0421,
-        });
-      } catch (error) {
-        console.error("Error obteniendo ubicación:", error);
-      }
-    })();
-  }, []);
-
-  const startTrip = () => {
-    try {
-      alert("Recorrido iniciado");
-    } catch (error) {
-      console.error("Error obteniendo ubicación:", error);
-      return;
-    }
-  };
+  if (isLoadingLocation) return <Loader title="Cargando ubicación..." />;
 
   return (
     <ThemedView style={styles.container}>
-      <LinearGradient
-        colors={["#7CB342", "#1976D2"]}
-        style={styles.header}
-      >
-        <ThemedText style={styles.title}>
-          <Ionicons name="map" size={28} color="#fff" /> Mapa
-        </ThemedText>
-        <TouchableOpacity style={styles.startButton} onPress={startTrip}>
-          <Ionicons name="play-circle" size={28} color="#fff" />
-          <ThemedText style={styles.buttonText}>Iniciar</ThemedText>
-        </TouchableOpacity>
-      </LinearGradient>
+      <AppHeader
+        title="Mapa"
+        icon="map"
+        rightContent={
+          <TouchableOpacity
+            style={[styles.startButton, isTracking && styles.stopButton]}
+            onPress={isTracking ? stopTrip : startTrip}
+          >
+            <Ionicons
+              name={isTracking ? "stop-circle" : "play-circle"}
+              size={28}
+              color="#fff"
+            />
+            <ThemedText style={styles.buttonText}>
+              {isTracking ? "Detener" : "Iniciar"}
+            </ThemedText>
+          </TouchableOpacity>
+        }
+      />
       <MapView
         provider={PROVIDER_GOOGLE || PROVIDER_DEFAULT}
         style={styles.map}
@@ -78,7 +54,29 @@ export default function MapScreen() {
         showsMyLocationButton
         initialRegion={region}
         region={region}
-      ></MapView>
+      >
+        {routePoints.length > 1 && (
+          <Polyline
+            coordinates={routePoints.map((p) => ({
+              latitude: p.latitude,
+              longitude: p.longitude,
+            }))}
+            strokeColor="#7CB342"
+            strokeWidth={4}
+          />
+        )}
+      </MapView>
+
+      {alert.config && (
+        <CustomAlert
+          visible={alert.visible}
+          title={alert.config.title}
+          message={alert.config.message}
+          buttons={alert.config.buttons}
+          icon={alert.config.icon as any}
+          iconColor={alert.config.iconColor}
+        />
+      )}
     </ThemedView>
   );
 }
@@ -87,23 +85,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  header: {
-    paddingTop: 60,
-    paddingBottom: 20,
-    paddingHorizontal: 20,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 5,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: "bold",
-    color: "#fff",
+  map: {
+    flex: 1,
+    width: "100%",
   },
   startButton: {
     flexDirection: "row",
@@ -119,8 +103,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "bold",
   },
-  map: {
-    flex: 1,
-    width: "100%",
+  stopButton: {
+    backgroundColor: "rgba(255, 82, 82, 0.3)",
   },
 });
